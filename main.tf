@@ -17,8 +17,8 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-  
-  subscription_id = "84caa2a3-0557-43e8-a480-e85949b85941"
+  subscription_id = var.azure_subscription_id
+  resource_provider_registrations = "none"
 }
 
 # Random string for unique storage account name
@@ -32,6 +32,12 @@ resource "random_string" "unique" {
 resource "azurerm_resource_group" "main" {
   name     = var.resource_group_name
   location = var.location
+}
+
+resource "azurerm_network_watcher" "main" {
+  name                = "NetworkWatcher_${var.location}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
 }
 
 # Storage Account for Flow Logs
@@ -52,12 +58,6 @@ resource "azurerm_storage_account" "flowlogs" {
     environment = "demo"
     purpose     = "flowlogs"
   }
-}
-
-# Network Watcher (use existing one - Azure creates one per region automatically)
-data "azurerm_network_watcher" "main" {
-  name                = "NetworkWatcher_${var.location}"
-  resource_group_name = "NetworkWatcherRG"
 }
 
 # Virtual Network
@@ -105,8 +105,8 @@ resource "azurerm_network_security_group" "main" {
 
 # VNet Flow Logs
 resource "azurerm_network_watcher_flow_log" "main" {
-  network_watcher_name = data.azurerm_network_watcher.main.name
-  resource_group_name  = data.azurerm_network_watcher.main.resource_group_name
+  network_watcher_name = azurerm_network_watcher.main.name
+  resource_group_name  = azurerm_network_watcher.main.resource_group_name
   name                 = "flowlog-vnet"
 
   target_resource_id = azurerm_virtual_network.main.id
@@ -117,27 +117,6 @@ resource "azurerm_network_watcher_flow_log" "main" {
     enabled = true
     days    = 2
   }
-
-  traffic_analytics {
-    enabled               = true
-    workspace_id          = azurerm_log_analytics_workspace.main.workspace_id
-    workspace_region      = azurerm_log_analytics_workspace.main.location
-    workspace_resource_id = azurerm_log_analytics_workspace.main.id
-    interval_in_minutes   = 10
-  }
-
-  tags = {
-    environment = "demo"
-  }
-}
-
-# Log Analytics Workspace (required for Traffic Analytics)
-resource "azurerm_log_analytics_workspace" "main" {
-  name                = "${var.vm_name}-law"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  sku                 = "PerGB2018"
-  retention_in_days   = 30
 }
 
 # Public IP
